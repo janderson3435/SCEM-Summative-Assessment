@@ -56,6 +56,7 @@ finance_data <- finance_data %>%
   separate(state_year_code, into = c("state", "year"), sep = "__", convert = TRUE) 
 
 ```
+
 ```{r}
 #finance_data["state"] <- str_to_title(finance_data["state"])
 finance_data["state"] <- str_to_title(pull(finance_data, state))
@@ -87,4 +88,48 @@ ncol(finance_data)
 head(finance_data)
 ```
 
+## A.7
+
+```{r}
+alaska_summary <- finance_data %>%
+  filter(state == "Alaska") %>%
+  group_by(decade) %>%
+  summarise(ed_mn = mean(education_expenditure, na.rm = 1),
+            ed_md = median(education_expenditure, na.rm = 1),
+            he_mn = mean(health_expenditure, na.rm = 1),
+            he_md = median(health_expenditure, na.rm = 1),
+            tr_mn = mean(transport_expenditure, na.rm = 1),
+            tr_md = median(transport_expenditure, na.rm = 1))
+
+alaska_summary
+```
+
+## A.8
+```{r}
+impute_by_median = function(x){
+  
+  md <- median(x, na.rm = 1)
+  
+  impute_function <- function(y){
+    if(is.na(y)){
+      return(md)
+    }else{
+      return(y)
+    }
+  }
+  
+  return(map_dbl(x, impute_function))
+}
+```
+
+```{r}
+idaho_2000 <- finance_data %>%
+  filter(state == "Idaho" & decade == 2000) %>%
+  select(-state, -decade)
+
+idaho_2000_imputed <- idaho_2000 %>% 
+  mutate_all(impute_by_median)
+  
+idaho_2000_imputed[1:5, c("year", "health_expenditure", "education_expenditure", "total_savings")]
+```
 
