@@ -1,5 +1,5 @@
 ---
-title: "Section A"
+title: "Scientific Computing and Empirical Methods Summative Assessment Section A"
 author: "Joe Anderson"
 date: "01/12/2021"
 output: html_document
@@ -9,13 +9,12 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r}
+```{r, warning = FALSE}
 # Imports
 library(Stat2Data)
 library(tidyverse)
 ```
 
-# Scientific Computing and Empirical Methods Summative Assessment Section A
 ## A.1
 ```{r}
 finance_data_original <- read.csv("Data\\finance_data_EMATM0061.csv")

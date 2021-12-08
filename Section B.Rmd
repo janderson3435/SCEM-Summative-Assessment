@@ -1,0 +1,235 @@
+---
+title: "Scientific Computing and Empirical Methods Summative Assessment Section B"
+author: "Joe Anderson"
+date: "05/12/2021"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, warning = FALSE}
+# Imports
+library(Stat2Data)
+library(tidyverse)
+```
+
+## B.1
+### a.
+
+$$p_0 = P(Sensor | ¬Person)$$
+$$p_1 = P(Sensor | Person)$$
+$$q = P(Person)$$
+$$\phi = P(Person | Sensor)$$
+
+By Bayes' theorem:
+
+$$\phi = \frac{P(Sensor | Person)P(Person)}{P(S)}$$
+
+By the definition of conditional probability:
+
+$$\begin{align*}
+P(Sensor) & = P(Sensor \bigcap Person) + P(Sensor \bigcap Person)\\
+& = P(Sensor | Person)P(Person) + P(Sensor | ¬Person)P(¬Person)\\
+& = qp_1 + (1-q)p_0
+\end{align*}$$
+
+Substituting into the Bayes' equation:
+
+$$\phi = \frac{qp_1}{qp_1 + (1-q)p_0}$$
+```{r}
+c_prob_person_given_alarm <- function(p0, p1, q){
+  phi <- q * p1 / (q * p1 + (1 - q) * p0)
+  return (phi)
+}
+```
+
+### b.
+
+```{r}
+p0 <- 0.05
+p1 <- 0.95
+
+phi <- c_prob_person_given_alarm(0.05, 0.95, 0.1)
+print(paste("Phi: ", phi))
+```
+### c.
+
+```{r}
+qs <- seq(0, 1, 0.01)
+
+prob_by_qs <- data.frame(qs) %>%
+  mutate(prob = c_prob_person_given_alarm(p0, p1, qs))
+
+ggplot(data = prob_by_qs, aes(x = qs, y = prob)) + geom_line() + theme_bw() + xlab("q probability") + ylab("Phi probability")
+
+```
+
+
+## B.2
+
+### a.
+
+$$\begin{equation}
+    p(x) =
+    \left\{
+        \begin{array}{cc}
+                 1 - \alpha - \beta - \gamma  & \mathrm{if\ } x = 0 \\
+                 \alpha   & \mathrm{if\ } x = 1 \\
+                  \beta & \mathrm{if\ } x = 2 \\
+                  \gamma & \mathrm{if\ } x = 5\\
+                  0& \mathrm{otherwise}\\
+                  
+        \end{array} 
+    \right.
+\end{equation}$$
+
+### b.
+
+$$\begin{align*}
+E(X) & = (1 - \alpha - \beta - \gamma) \times 0 + \alpha \times 1 + \beta \times 2 +\gamma \times 5\\
+& = \alpha + 2\beta + 5\gamma
+\end{align*}
+$$
+
+### c.
+
+$$Var(X) = E(X^2) - E(X)^2 $$
+
+$$E(X^2) = \alpha + 4\beta + 25\gamma$$
+
+$$\begin{align*}
+Var(X) & =  \alpha + 4\beta + 25\gamma - (\alpha + 2\beta + 5\gamma)^2\\
+& = \alpha + 4\beta + 25\gamma - (\alpha^2 + 4\alpha\beta + 10\alpha\gamma +  4\beta^2 + 20\beta\gamma + 25\gamma^2 )
+\end{align*}
+$$
+
+### d.
+
+$$\begin{align*}
+E(\bar{X}) & = \frac{1}{n}\sum^n_{i=1}E(X_i)\\
+& = \frac{1}{n}\sum^n_{i=1}(\alpha + 2\beta + 5\gamma)\\
+& = \frac{n}{n}(\alpha + 2\beta + 5\gamma)\\
+& = \alpha + 2\beta + 5\gamma
+\end{align*}
+$$
+
+### e.
+
+
+$$\begin{align*}
+Var(\bar{X}) & = Var(\frac{1}{n}\sum^n_{i=1}X_i)\\
+& = \frac{1}{n^2}\sum^n_{i=1}Var(X_i)\\
+& = \frac{n}{n^2}(\alpha + 4\beta + 25\gamma - (\alpha + 2\beta + 5\gamma)^2) \\
+& = \frac{1}{n}(\alpha + 4\beta + 25\gamma - (\alpha + 2\beta + 5\gamma)^2)
+\end{align*}$$
+
+### f.
+
+```{r}
+sample_X_0125 <- function(alpha, beta, gamma, n){
+  
+  sample_X<-data.frame(U=runif(n))%>%
+    mutate(X=case_when((0 <= U)&(U < alpha) ~ 1,
+    (alpha <= U) & (U < alpha + beta) ~ 2,
+    (alpha + beta <= U) & (U < alpha + beta + gamma) ~ 5,
+    (alpha + beta + gamma <= U) & (U <=1 ) ~ 0))%>%
+    pull(X)
+  
+return(sample_X)
+}
+```
+
+### g.
+```{r}
+alpha <- 0.1
+beta <- 0.2
+gamma <- 0.3
+n <- 100000
+
+set.seed(0)
+sample <- sample_X_0125(alpha, beta, gamma, n)
+
+sample_mean <- mean(sample)
+sample_var <- var(sample)
+
+print(paste("Sample mean: ", sample_mean))
+print(paste("Sample variance: ", sample_var))
+
+```
+
+Check if this is as expected by using expressions from earlier:
+
+```{r}
+exp_mean <- alpha + 2 * beta + 5 * gamma
+exp_var <-  (alpha + 4 * beta + 25 * gamma) - (alpha + 2 * beta + 5 * gamma)^2
+
+print(paste("Expected sample mean: ", exp_mean))
+print(paste("Expected sample variance: ", exp_var))
+```
+ The values are each very close, which is a we would expect when performing this number of trials. By the law of large numbers, we would expect mean and variance to tend to 2 and 4.4 respectively.
+ 
+### h.
+
+```{r}
+alpha <- 0.1
+beta <- 0.2
+gamma <- 0.3
+n <- 100
+
+set.seed(0)
+trials_df <- data.frame(trial = seq(1,10000)) %>%
+  mutate(sample = map(.x = trial, ~sample_X_0125(alpha, beta, gamma, n))) %>%
+  mutate(mean = map_dbl(.x = sample, ~mean(.x)))
+```
+
+### i.
+
+```{r}
+ggplot(data = trials_df, aes(x = mean)) + geom_histogram(binwidth = 0.02) + xlab("Mean") + ylab("Count")
+```
+
+### j.
+CHECK LOGIC HERE
+
+```{r}
+means <- trials_df %>%
+  pull(mean)
+
+exp_mean <- mean(means)
+exp_var <- var(means)
+
+exp_mean <- format(round(exp_mean, 2), nsmall = 2) 
+exp_var <- format(round(exp_var, 2), nsmall = 2) 
+
+print(paste("Expected X bar: ", exp_mean))
+print(paste("Variance X bar ", exp_var))
+```
+
+### k.
+
+```{r}
+
+```
+
+
+### l.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
