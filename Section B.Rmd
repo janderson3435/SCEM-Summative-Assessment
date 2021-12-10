@@ -193,7 +193,6 @@ ggplot(data = trials_df, aes(x = mean)) + geom_histogram(binwidth = 0.02) + xlab
 ```
 
 ### j.
-CHECK LOGIC HERE
 
 ```{r}
 means <- trials_df %>%
@@ -202,21 +201,177 @@ means <- trials_df %>%
 exp_mean <- mean(means)
 exp_var <- var(means)
 
-exp_mean <- format(round(exp_mean, 2), nsmall = 2) 
-exp_var <- format(round(exp_var, 2), nsmall = 2) 
+exp_mean <- format(round(exp_mean, 4), nsmall = 4) 
+exp_var <- format(round(exp_var, 4), nsmall = 4) 
 
-print(paste("Expected X bar: ", exp_mean))
+print(paste("Expectation X bar: ", exp_mean))
 print(paste("Variance X bar ", exp_var))
 ```
 
 ### k.
 
 ```{r}
+exp_mean = as.numeric(exp_mean)
+exp_var = as.numeric(exp_var)
+
+xs <- seq(exp_mean - 4 * sqrt(exp_var), exp_mean + 4 * sqrt(exp_var), 0.0001)
+gauss <- 200 * dnorm(xs, mean = exp_mean, sd = sqrt(exp_var))
+
+colors <- c("Histogram" = "black", "Gaussian density" = "blue")
+fills <- c("Histogram" = "grey", "Gaussian density" = "grey")
+
+ggplot() + 
+  theme_bw() + 
+  geom_line(data = data.frame(xs, gauss), aes(x = xs, y = gauss,  color = "Gaussian density"), size = 2) +
+  geom_histogram(data = trials_df, aes(x = mean, fill = "Histogram", color = "Histogram"), binwidth = 0.02) + 
+  xlab("Mean") + 
+  ylab("Count") + 
+  scale_color_manual(name = "", values = colors) +
+  scale_fill_manual(name = "", values = fills) 
 
 ```
 
 
 ### l.
+
+We observe a clear relationship between the two plots. This is as a result of the central limit theorem. Each observation of the sample mean within the simulation experiment is a random variable with expectation 2 and variance of approximately 0.04, from the earlier calculations and empirical methods. 
+
+Letting $W \sim \mathcal{N}(2, 0.04)$, so that $\bar{W} = \frac{W - 2}{\sqrt{0.04}}$ is a standard Gaussian of the form $\bar{W}\sim \mathcal{N}(0,1)$.
+
+The central limit theorem states:
+
+$$\begin{align*}
+\lim_{n\to \infty}\mathbb{P} \Bigg\{ \sqrt\frac{n}{0.04}(\frac{1}{n}\sum_{i=1}^nX_i - 2) \le x \Bigg\} & =
+\mathbb{P}(\bar{W} \le x) \\
+& = \mathbb{P}(W < 2 + x\sqrt{0.04})\\
+& = \mathbb{P}(W < 2 + 0.2x)
+\end{align*}$$
+
+In this case we have n = 10,000, so we see it converging to a fair approximation of this Gaussian. We have to remember the factor of 200, as the pdf of a Gaussian gives probabilities in the range 0 to 1, whereas our experiment gives a count of each mean size for 10, 000 trials.
+
+## B.3
+
+### a.
+By parts:
+$$\begin{align*}
+E(X) & = \int^\infty_{-\infty} xp_\lambda(x)dx \\
+& = \int^\infty_0 \lambda x e^{-\lambda x}dx \\
+& = [-xe^{-\lambda x}]^\infty_0 +  \int^\infty_0 e^{-\lambda x}dx \\
+& = [-\frac{1}{\lambda}e^{-\lambda x}]^\infty_0\\
+& = \frac{1}{\lambda}
+\end{align*}$$
+
+
+Again by parts:
+
+$$\begin{align*}
+E(X^2) & = \int^\infty_{-\infty} x^2p_\lambda(x)dx \\
+& = \int^\infty_0 \lambda x^2 e^{-\lambda x}dx \\
+& = [-x^2e^{-\lambda x}]^\infty_0 +  2\int^\infty_0 xe^{-\lambda x}dx \\
+& = \frac{2}{\lambda}\int^\infty_0 \lambda xe^{-\lambda x}dx \\
+& = \frac{2}{\lambda}E(X) \\
+& = \frac{2}{\lambda^2} \\
+Var(X) & = \frac{2}{\lambda^2} - \frac{1}{\lambda}^2 = \frac{1}{\lambda}^2
+\end{align*}$$
+
+
+## b.
+
+$$F_\lambda(x) = \int^x_{-\infty}p_\lambda(t)dt\\$$
+
+$$\begin{equation}
+    =
+    \left\{
+        \begin{array}{cc}
+                 0  & \mathrm{if\ } x \le 0 \\
+                 \int^x_0\lambda e^{-\lambda t}   & \mathrm{if\ } x \gt 0
+                  
+        \end{array} 
+    \right.
+\end{equation}$$
+
+$$\int^x_0\lambda e^{-\lambda t} = 1 - e^ {-\lambda x}$$
+
+$$\begin{equation}
+    =
+    \left\{
+        \begin{array}{cc}
+                 0  & \mathrm{if\ } x \le 0 \\
+                 1 - e^ {-\lambda x}   & \mathrm{if\ } x \gt 0
+                  
+        \end{array} 
+    \right.
+\end{equation}$$
+
+### c.
+
+$$\ell(\lambda) = \prod^n_{i=1} f_\lambda(X_i) = \lambda^ne^{-n\lambda\bar(X)} \\
+\log \ell(\lambda) = n\log(\lambda) - n\lambda\bar{X}\\
+\frac{\partial}{\partial\lambda}\log\ell(\lambda) = \frac{n}{\lambda} - n \bar{X}
+$$
+Max when $\frac{\partial}{\partial\lambda}\log\ell(\lambda) = 0$:
+
+$$\frac{n}{\lambda} - n \bar{X} = 0\\
+\hat{\lambda}_{\mathrm{MLE}} = \frac{1}{\bar{X}}$$
+
+### d.
+
+```{r}
+set.seed(0)
+lambda_0 <- 0.01
+num_trials_per_sample_size <- 100
+min_sample_size <- 5
+max_sample_size <- 1000
+sample_size_inc <- 5
+
+exp_mse_simulation_df <- crossing(trial = seq(num_trials_per_sample_size),
+                                  sample_size = seq(min_sample_size, max_sample_size, sample_size_inc)) %>%
+  mutate(sample = pmap(.l = list(trial, sample_size), ~rexp(.y, lambda_0))) %>%
+  mutate(lambda_mle = 1/map_dbl(.x = sample, .f = mean)) %>%
+  group_by(sample_size) %>%
+  summarise(mse = mean((lambda_mle - lambda_0)^2))
+
+ggplot(data = exp_mse_simulation_df, aes(x = sample_size, y = mse)) + theme_bw() + geom_smooth() + xlab("Sample size")+ ylab("Mean square error")
+```
+
+### e.
+```{r}
+folder_name<-"Data"
+file_name<-"bird_data_EMATM0061"
+bird_data<-read.csv(paste0(folder_name,"\\",file_name,".csv"))
+
+bird_data <- bird_data %>%
+  mutate(time_diffs = lead(Time) - Time) 
+
+time_diffs = bird_data %>% pull(time_diffs)
+
+lambda_MLE <- 1 / mean(time_diffs, na.rm = TRUE)
+print(paste("Maximum likelihood estimaror for rate parameter: ", lambda_MLE))
+
+```
+
+### f.
+
+```{r}
+exp_confidence_interval <- function(sample,confidence_level){
+  alpha <- 1 - confidence_level
+  z_alpha <- qnorm(1 - alpha / 2)
+  n <- length(sample)
+  mn <- mean(sample, na.rm = TRUE)
+  ci_l <- (1 / mn) * (1 - z_alpha / sqrt(n))
+  ci_u <- (1 / mn) * (1 + z_alpha / sqrt(n))
+  return(c(ci_l,ci_u))
+}
+
+exp_confidence_interval(time_diffs, 0.95)
+```
+
+
+
+
+
+
+
 
 
 
