@@ -187,9 +187,12 @@ library(tidyverse)</code></pre>
 <h2>B.1</h2>
 <div id="a." class="section level3">
 <h3>a.</h3>
-<p><span class="math display">\[p_0 = P(Sensor | ¬Person)\]</span> <span class="math display">\[p_1 = P(Sensor | Person)\]</span> <span class="math display">\[q = P(Person)\]</span> <span class="math display">\[\phi = P(Person | Sensor)\]</span></p>
+<p><span class="math display">\[p_0 = P(Sensor | ¬Person)\]</span></p>
+<p><span class="math display">\[p_1 = P(Sensor | Person)\]</span></p>
+<p><span class="math display">\[q = P(Person)\]</span></p>
+<p><span class="math display">\[\phi = P(Person | Sensor)\]</span></p>
 <p>By Bayes’ theorem:</p>
-<p><span class="math display">\[\phi = \frac{P(Sensor | Person)P(Person)}{P(S)}\]</span></p>
+<p><span class="math display">\[\phi = \frac{P(Sensor | Person)P(Person)}{P(Sensor)}\]</span></p>
 <p>By the definition of conditional probability:</p>
 <p><span class="math display">\[\begin{align*}
 P(Sensor) &amp; = P(Sensor \bigcap Person) + P(Sensor \bigcap Person)\\

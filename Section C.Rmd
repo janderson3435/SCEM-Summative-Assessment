@@ -1,0 +1,280 @@
+---
+title: "Scientific Computing and Empirical Methods Summative Assessment Section C"
+author: "Joe Anderson"
+date: "19/12/2021"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, warning = FALSE}
+# Imports
+library(Stat2Data)
+library(tidyverse)
+```
+# An investigation of SVMs in the context of heart disease data
+
+#### 1. Description of algorithm, how predictions and what problems suitable for
+
+Support Vector Machines are a widely-used machine learning technique 
+
+#### 2. Dataset, train validate test split, give source, how many features/exmaples, types of vars
+
+The dataset the SVM will be applied to is a health dataset from Kaggle
+[1] that concerns heart disease patients. There are a total of 11 features, each
+referring to medical information about the patient such as age, resting heart
+rate, cholesterol levels and so on. The SVM will be trained on these features to
+predict the 12th column, the heart disease class. It will be important to select
+an appropriate sampling method for the train/validate/test split, as the data
+features slightly more heart disease positive cases (508 to 410 negative). 
+
+```{r}
+# Import and exploration
+heart_data <- read.csv("Data\\heart.csv")
+
+num_row <- nrow(heart_data)
+num_col <- ncol(heart_data)
+
+print(paste("Number of rows: ", num_row))
+print(paste("Number of columns: ", num_col))
+
+head(heart_data, 3)
+```
+918 examples with 12 features.
+
+
+
+```{r}
+sum(is.na(heart_data))
+```
+No missing values so no need to consider imputation techniques (or other).
+
+Datatype of each variable:
+```{r}
+str(heart_data)
+```
+Integer/numeric datatype easy to deal with, chars are categorical data so somewhat harder. 
+
+### TODO: more exploration if time - look at distribution of each
+
+#### Data preparation: need to convert the categorical data 
+
+```{r}
+heart_data$Sex <- as.numeric(unclass(factor(heart_data$Sex)))
+heart_data$ChestPainType <- as.numeric(unclass(factor(heart_data$ChestPainType)))
+heart_data$RestingECG <- as.numeric(unclass(factor(heart_data$RestingECG)))
+heart_data$ExerciseAngina <- as.numeric(unclass(factor(heart_data$ExerciseAngina)))
+heart_data$ST_Slope <- as.numeric(unclass(factor(heart_data$ST_Slope)))
+
+str(heart_data)
+  
+```
+
+```{r}
+set.seed(0)
+
+num_train <- floor(num_row * 0.5)
+num_validate <- floor(num_row * 0.25)
+num_test <- num_row - num_train - num_validate
+
+train_inds <- sample(seq(num_row), num_train)
+valid_inds <- sample(seq(num_row), num_validate)
+test_inds <- sample(seq(num_row), num_test)
+
+heart_train <- heart_data %>% filter(row_number() %in% train_inds)
+heart_valid <-heart_data %>% filter(row_number() %in% valid_inds)
+heart_test <- heart_data %>% filter(row_number() %in% test_inds)
+
+heart_train_x <- select(heart_train, -HeartDisease)
+heart_train_y <- select(heart_train, HeartDisease)
+
+heart_valid_x <- select(heart_valid, -HeartDisease)
+heart_valid_y <- select(heart_valid, HeartDisease)
+  
+heart_test_x <- select(heart_test, -HeartDisease)
+heart_test_y <- select(heart_test, HeartDisease)
+```
+#### 3. Appropriate metrics? Explore on both train and validate as amount of training data
+
+```{r}
+library(e1071)
+
+model = svm(x = heart_train_x, y = heart_train_y, cost = 1, type = 'C-classification')
+
+train_preds <- predict(model, heart_train_x %>% as.matrix(), type = "class") %>% as.integer() - 1 # -1 as svm outputs it as two categories (0,1) labelled (1,2)
+valid_preds <- predict(model, heart_valid_x %>% as.matrix(), type = "class") %>% as.integer() - 1
+  
+train_errror <- mean(abs(train_preds - heart_train_y %>% as.matrix()))
+valid_error <- mean(abs(valid_preds - heart_valid_y %>% as.matrix()))
+
+print(paste("Error on training set: ", train_errror))
+print(paste("Error on validation set: ", valid_error))
+
+```
+#### 4. Vary a hyperparameter
+
+```{r}
+costs <- 10^seq(-3, 1, 0.1)
+
+tuning_experiment <- data.frame(costs) %>%
+  mutate(model = map(.x = costs, ~svm(x = heart_train_x, y = heart_train_y, cost = .x, type = 'C-classification'))) %>%
+  mutate(train_preds = map(.x = model, ~predict(.x, heart_train_x %>% as.matrix(), type = "class") %>% as.integer() - 1))  %>%
+  mutate(Train_Error = map_dbl(.x = train_preds, ~ mean(abs(.x - heart_train_y %>% as.matrix())))) %>%
+  mutate(valid_preds = map(.x = model, ~predict(.x, heart_valid_x %>% as.matrix(), type = "class") %>% as.integer() - 1))  %>%
+  mutate(Valid_Error = map_dbl(.x = valid_preds, ~mean(abs(.x - heart_valid_y %>% as.matrix()))))
+
+tuning_pivoted <- tuning_experiment %>% pivot_longer(c(Train_Error, Valid_Error), names_to = "Dataset", values_to = "Error")
+
+ggplot(data = tuning_pivoted, aes(x = costs, y = Error, colour = Dataset )) + geom_line()
+```
+We observe the standard machine learning performance curve of very poor initial performance (zero fit) to rapidly increasing performance as the parameter actually starts learning, to then overfitting due to the parameter, and thus a drop in performance. 
+
+```{r}
+# Cost for which minimal error produced:
+costs[which.min(select(tuning_experiment, Valid_Error) %>% as.matrix())]
+```
+#### Other metrics
+Precision: Correct positive predictions relative to total positive predictions
+Recall: Correct positive predictions relative to total actual positives
+F1: Metric for comparison of performance based on precision and recall
+
+F1 = 2 * (Precision * Recall) / (Precision + Recall)
+
+```{r}
+library(caret)
+
+
+tuning_experiment <- tuning_experiment %>%
+# Train precision, recall, f1
+  mutate(train_precision = map_dbl(.x = train_preds, ~posPredValue(as.factor(.x), as.factor(as.matrix(heart_train_y)), positive = 1))) %>%
+  mutate(train_recall = map_dbl(.x = train_preds, ~sensitivity(as.factor(.x), as.factor(as.matrix(heart_train_y)), positive = 1))) %>%
+  mutate(train_f1 = (2 * train_precision * train_recall) / (train_precision + train_recall)) %>%
+# Validation precision, recall, f1
+  mutate(valid_precision = map_dbl(.x = valid_preds, ~posPredValue(as.factor(.x), as.factor(as.matrix(heart_valid_y)), positive = 1))) %>%
+  mutate(valid_recall = map_dbl(.x = valid_preds, ~sensitivity(as.factor(.x), as.factor(as.matrix(heart_valid_y)), positive = 1))) %>%
+  mutate(valid_f1 = (2 * valid_precision * valid_recall) / (valid_precision + valid_recall))
+
+# note: precision/recall gives NA when no positive predictions - this is the case for small cost value 
+
+tuning_pivoted_f1 <- tuning_experiment %>% pivot_longer(c(train_f1, valid_f1), names_to = "Dataset", values_to = "f1")
+tuning_pivoted_recall <- tuning_experiment %>% pivot_longer(c(train_recall, valid_recall), names_to = "Dataset", values_to = "recall")
+tuning_pivoted_precision <- tuning_experiment %>% pivot_longer(c(train_precision, valid_precision), names_to = "Dataset", values_to = "precision")
+
+ggplot(data = tuning_pivoted_f1, aes(x = costs, y = f1, colour = Dataset )) + geom_line()
+
+ggplot(data = tuning_pivoted_recall, aes(x = costs, y = recall, colour = Dataset )) + geom_line()
+
+ggplot(data = tuning_pivoted_precision, aes(x = costs, y = precision, colour = Dataset )) + geom_line()
+
+
+  
+```
+
+#### Final evaluation on test
+
+```{r}
+model = svm(x = heart_train_x, y = heart_train_y, cost = 3, type = 'C-classification')
+
+test_preds <- predict(model, heart_test_x %>% as.matrix(), type = "class") %>% as.integer() - 1
+
+test_error <- mean(abs(test_preds - heart_test_y %>% as.matrix()))
+test_precision <- posPredValue(as.factor(test_preds), as.factor(as.matrix(heart_test_y)), positive = 1)
+test_recall <- sensitivity(as.factor(test_preds), as.factor(as.matrix(heart_test_y)), positive = 1)
+test_f1 <- (2 * test_precision * test_recall) / (test_precision + test_recall)
+
+print(paste("Test error: ", test_error))
+print(paste("Test Precision: ", test_precision))
+print(paste("Test Recall: ", test_recall))
+print(paste("Test f1 : ", test_f1))
+
+```
+
+#### 5. Cross validation 
+
+```{r, warning = FALSE}
+# combine train and validation data into one dataframe
+train_validation_set <- rbind(heart_train, heart_valid)
+
+num_train_valid <- nrow(train_validation_set)
+
+train_validation_by_fold <- function(train_validate_data, fold, num_folds){
+  num_train_valid <- nrow(train_validate_data)
+  num_per_fold <- ceiling(num_train_valid / num_folds)
+  
+  fold_start <- (fold - 1) * num_per_fold + 1
+  fold_end <- min(fold * num_per_fold, num_train_valid)
+
+  fold_indices <- seq(fold_start, fold_end)
+  
+  valid_data <- train_validate_data %>% filter(row_number() %in% fold_indices)
+  train_data <- train_validate_data %>% filter(!row_number() %in% fold_indices)
+  
+  return(list(train = train_data, validation = valid_data))
+}
+
+svm_valid_err_by_fold <- function(train_valid_data, fold, num_folds, y_name, cost){
+  data_split <- train_validation_by_fold(train_valid_data, fold, num_folds)
+  train_data <- data_split$train
+  valid_data <- data_split$validation
+  
+  train_x <- select(train_data, -HeartDisease)
+  train_y <- select(train_data, HeartDisease)
+    
+  valid_x <- select(valid_data, -HeartDisease)
+  valid_y <- select(valid_data, HeartDisease)
+    
+  model <- svm(x = train_x, y = train_y, cost = cost, type = 'C-classification')
+  preds <- predict(model, valid_x %>% as.matrix(), type = "class") %>% as.integer() - 1
+
+  val_msq_error <- mean((preds - valid_y %>% as.matrix())^2)
+ 
+  return(val_msq_error)
+}
+
+num_folds <- 10
+costs <- 10^seq(-2, 1, 0.01) 
+
+cross_val_results <- cross_df(list(cost = costs, fold = seq(num_folds))) %>%
+  mutate(val_error = map2_dbl(cost, fold, ~svm_valid_err_by_fold(train_validation_set, .y, num_folds, "y", .x))) %>%
+  group_by(cost) %>%
+  summarise(val_error = mean(val_error))
+
+cross_val_results
+```
+```{r}
+min_val_error <- cross_val_results %>% pull(val_error) %>% min()
+optimal_cost <- cross_val_results %>% filter(val_error == min_val_error) %>% pull(cost)
+optimal_cost
+```
+```{r}
+train_valid_x = select(train_validation_set, -HeartDisease)
+train_valid_y = select(train_validation_set, HeartDisease)
+
+optimal_model <-  svm(x = train_valid_x, y = train_valid_y, cost = optimal_cost[1], type = 'C-classification')
+preds <- predict(optimal_model, heart_test_x %>% as.matrix(), type = "class") %>% as.integer() - 1
+test_msq_error <- mean((preds - heart_test_y %>% as.matrix())^2)
+ 
+test_error <- mean(abs(preds - heart_test_y %>% as.matrix()))
+test_precision <- posPredValue(as.factor(preds), as.factor(as.matrix(heart_test_y)), positive = 1)
+test_recall <- sensitivity(as.factor(preds), as.factor(as.matrix(heart_test_y)), positive = 1)
+test_f1 <- (2 * test_precision * test_recall) / (test_precision + test_recall)
+test_confusion <- confusionMatrix(as.factor(preds), as.factor(as.matrix(heart_test_y)), positive = "1")
+
+print("Optimal cost from cross validation results")
+print(paste("Test mean square error: ", test_msq_error))
+print(paste("Test error: ", test_error))
+print(paste("Test Precision: ", test_precision))
+print(paste("Test Recall: ", test_recall))
+print(paste("Test f1 : ", test_f1))
+
+test_confusion
+```
+```{r}
+ggplot(data=cross_val_results, aes(x=costs, y=val_error)) + geom_line()
+```
+Similar behaviour to that observed earlier by just varying the parameter on the same training set. 
+

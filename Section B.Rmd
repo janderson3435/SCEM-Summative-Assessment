@@ -21,13 +21,18 @@ library(tidyverse)
 ### a.
 
 $$p_0 = P(Sensor | ¬Person)$$
+
 $$p_1 = P(Sensor | Person)$$
+
 $$q = P(Person)$$
+
 $$\phi = P(Person | Sensor)$$
+
 
 By Bayes' theorem:
 
-$$\phi = \frac{P(Sensor | Person)P(Person)}{P(S)}$$
+$$\phi = \frac{P(Sensor | Person)P(Person)}{P(Sensor)}$$
+
 
 By the definition of conditional probability:
 
